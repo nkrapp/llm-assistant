@@ -5,6 +5,8 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
+from calendarHelper.calendarHelper import CalendarHelper
+import datetime
 
 # colorIds:
 """
@@ -22,10 +24,9 @@ red / Tomate: 11
 """
 
 
-class CalendarHelper:
+class GoogleCalendar(CalendarHelper):
 
     def __init__(self):
-        
         # Load environment variables from .env file
         load_dotenv()
         
@@ -57,9 +58,29 @@ class CalendarHelper:
             self.define_function_editEvent(),
             # self.define_function_endConversation(),
         ]
+        
+        date = datetime.datetime.now().isoformat()
+        self.prompt = f"""
+You are a helpful dialogue-assistant with tool calling capabilities, that allow you to access and change a calendar. Todays date is {date}. 
+
+After every message decide if you want to call a function or anwser with plain text. You CANNOT do both. Keep the conversation going until the user specifically wants to end the conversation. DON'T end the conversation to early.
+Respond with the function you want to use if you decide to call a function, else respond with plain text.
+
+Here are the different colorIds you should use:
+'10' - green and music related, 
+'5' - yellow and Friends related, 
+'4' - light red and study related, 
+'8' - grey and used when unsure",
+
+If you are calling a function: Always put the object inside a list. Do not write an introduction or summary.
+"""
+
 
     def defineTools(self) -> list[str]:
         return self.tools
+
+    def definePrompt(self) -> str:
+        return self.prompt
 
     def getEvents(self, timeFrom, timeTill):
         try:
@@ -248,4 +269,54 @@ class CalendarHelper:
             }
         }
         return function
+    
+    def handleFunctionCall(self, calledFunction: str, arguments: dict) -> str:
 
+        if calledFunction == "getEvents":
+            events = self.getEvents(
+                timeFrom = arguments["timeFrom"], 
+                timeTill = arguments["timeTill"]
+            )
+            if len(events) == 0:
+                return "There are no upcoming events."
+            
+            else:
+                return f"The events for the asked time are: {events}."
+            
+        elif calledFunction == "putEvent":
+            try:
+                event = self.putEvent(
+                    summary = arguments["summary"], 
+                    timeFrom = arguments["timeFrom"], 
+                    timeTill = arguments["timeTill"],
+                    description = arguments["description"] if "description" in arguments else None,
+                    colorId = arguments["colorId"] if "colorId" in arguments else None
+                )
+                return f"Following event was created: {event}."
+            
+            except Exception as error:
+                return f"The event could not be created because of {error}. Excuse yourself in front of the user."
+        
+        elif calledFunction == "deleteEvent":
+            try:
+                self.deleteEvent(eventId = arguments["eventId"])
+                return "The event was deleted successfully"
+                
+            except Exception as error:
+                return f"The event could not be deleted because of {error}. Excuse yourself in front of the user."
+                
+        elif calledFunction == "editEvent":
+            try:
+                event = self.editEvent(
+                    eventId = arguments["eventId"],
+                    timeFrom = arguments["timeFrom"] if "timeFrom" in arguments else None,
+                    timeTill = arguments["timeTill"] if "timeTill" in arguments else None,
+                    summary = arguments["summary"] if "summary" in arguments else None,
+                    description = arguments["description"] if "description" in arguments else None,
+                    colorId = arguments["colorId"] if "colorId" in arguments else None
+                )
+                return f"Following event was edited: {event}."
+                
+            except Exception as error:
+                return f"The event could not be edited because of {error}. Excuse yourself in front of the user."
+                

@@ -2,3 +2,4 @@ __pycache__/
 .venv
 credentials.json
 token.json
+nextcloudCredentials.json
