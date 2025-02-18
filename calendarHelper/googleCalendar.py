@@ -27,6 +27,7 @@ red / Tomate: 11
 class GoogleCalendar(CalendarHelper):
 
     def __init__(self):
+        super().__init__()
         # Load environment variables from .env file
         load_dotenv()
         
@@ -51,19 +52,22 @@ class GoogleCalendar(CalendarHelper):
             with open('token.json', 'w') as token:
                 token.write(self.creds.to_json())
 
-        self.tools = [
+        for tool in [
             self.define_function_getEvents(),
             self.define_function_putEvents(),
             self.define_function_deleteEvent(),
             self.define_function_editEvent(),
-            # self.define_function_endConversation(),
-        ]
+        ]:
+            self.tools.append(tool)
         
-        date = datetime.datetime.now().isoformat()
+        self.today = datetime.datetime.now().isoformat()
         self.prompt = f"""
-You are a helpful dialogue-assistant with tool calling capabilities, that allow you to access and change a calendar. Todays date is {date}. 
+You are a helpful dialogue-assistant with tool calling capabilities, that allow you to access and change a calendar. 
+Have a pleasant conversation with the user and try to help them with their tasks.        
+Todays date is {self.today}. 
 
-After every message decide if you want to call a function or anwser with plain text. You CANNOT do both. Keep the conversation going until the user specifically wants to end the conversation. DON'T end the conversation to early.
+Call a function only if you are sure the user wants a specific tool called. Ask for more information if a task request seems to broad.
+After every message decide if you want to call a function or anwser with plain text. You CANNOT do both. Call a function only if you are sure the user wants a specific tool called. Keep the conversation going until the user specifically wants to end the conversation. DON'T end the conversation to early.
 Respond with the function you want to use if you decide to call a function, else respond with plain text.
 
 Here are the different colorIds you should use:

@@ -9,6 +9,7 @@ import uuid
 class NextcloudCalendar(CalendarHelper):
 
     def __init__(self):
+        super().__init__()
 
         with open('nextcloudCredentials.json') as f:
             d = json.load(f)
@@ -30,18 +31,19 @@ class NextcloudCalendar(CalendarHelper):
             else:
                 self.calendar: caldav.Calendar = calendar
 
-        self.tools = [
+        for tool in [
             # self.define_function_getEvents(),
             self.define_function_putEvents(),
-            # self.define_function_deleteEvent(),
-            # self.define_function_editEvent(),
-            # self.define_function_endConversation(),
-        ]
+        ]:
+            self.tools.append(tool)
         
         self.today = datetime.datetime.now().strftime("%Y%m%dT%H%M%SZ")
-        self.prompt = f"""
-You are a helpful dialogue-assistant with tool calling capabilities, that allow you to access and change a calendar. Todays date is {self.today}. 
+        self.prompt = f"""You are a helpful dialogue-assistant with tool calling capabilities, that allow you to access and change a calendar. 
+Have a pleasant conversation with the user and try to help them with their tasks.
+        
+Todays date is {self.today}. 
 
+Call a function only if you are sure the user wants a specific tool called. Ask for more information if a task request seems to broad.
 After every message decide if you want to call a function or anwser with plain text. You CANNOT do both. Keep the conversation going until the user specifically wants to end the conversation. DO NOT end the conversation to early.
 Respond with the function you want to use if you decide to call a function, else respond with plain text.
 
@@ -66,6 +68,16 @@ If you are calling a function: Always put the object inside a list. Do not write
     def definePrompt(self) -> str:
         return self.prompt
 
+    def getEvents(self, timeFrom, timeTill):
+        events = self.calendar.date_search(start = timeFrom, end = timeTill)
+        result_events = []
+        for (index, event) in enumerate(events):
+            vevent = event.vobject_instance.vevent
+            summary = vevent.summary.value if hasattr(vevent, 'summary') else "No title"
+            dtstart = vevent.dtstart.value if hasattr(vevent, 'dtstart') else "Unknown start time"
+            dtend = vevent.dtend.value if hasattr(vevent, 'dtend') else "Unknown end time"
+            result_events.append(f"Event-{index}: summary is '{summary}' and from {dtstart} until {dtend}")
+        return result_events
 
     def putEvent(self, summary, timeFrom, timeTill, description = None):
         
@@ -93,7 +105,7 @@ END:VCALENDAR""")
             "type": "function",
             "function": {
                 "name": "getEvents",
-                "description": "Get information about events in the specified time slot. timeFrom and timeTill have to be in isoformat",
+                "description": "Get information about events in the specified time slot. timeFrom and timeTill have to be in iCalendar (ICS) format (YYYYMMDDTHHMMSSZ).",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -195,6 +207,18 @@ END:VCALENDAR""")
             
             except Exception as error:
                 return f"The event could not be created because of {error}. Excuse yourself in front of the user."
+            
+        elif calledFunction == "getEvents":
+            try:
+                events = self.getEvents(
+                    timeFrom = arguments["timeFrom"], 
+                    timeTill = arguments["timeTill"],
+                )
+                return f"Following events were found: {events}."
+            
+            except Exception as error:
+                return f"Events could not be found because of {error}. Excuse yourself in front of the user."
+            
         else:
             return "The called function does not exist. DO NOT try again!"
         
