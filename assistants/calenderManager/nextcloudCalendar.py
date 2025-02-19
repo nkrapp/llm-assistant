@@ -1,12 +1,12 @@
 import os.path
 from dotenv import load_dotenv
-from calendarHelper.calendarHelper import CalendarHelper
+from assistants.managerStructure import ManagerStructure
 import datetime
 import json
 import caldav
 import uuid
 
-class NextcloudCalendar(CalendarHelper):
+class NextcloudCalendar(ManagerStructure):
 
     def __init__(self):
         super().__init__()
@@ -16,23 +16,24 @@ class NextcloudCalendar(CalendarHelper):
             
             self.client = caldav.DAVClient(
                 url = "https://cloud.sympalog.org/remote.php/dav",
-                username = d["user"],
+                username = d["login"],
                 password = d["pass"],
             )
+            self.calendarName = d["calendarName"]
         
         calendars = self.client.principal().calendars()
         
         if not calendars:
             raise Exception("calendar not found")
         else:
-            calendar = self.getCalendarByName(calendars, "Nikita")
+            calendar = self.getCalendarByName(calendars, self.calendarName)
             if calendar == None:
                 raise Exception("calendar not found")
             else:
                 self.calendar: caldav.Calendar = calendar
 
         for tool in [
-            # self.define_function_getEvents(),
+            self.define_function_getEvents(),
             self.define_function_putEvents(),
         ]:
             self.tools.append(tool)
@@ -69,11 +70,15 @@ If you are calling a function: Always put the object inside a list. Do not write
         return self.prompt
 
     def getEvents(self, timeFrom, timeTill):
+        print(f"searching from {timeFrom} until {timeTill}")
         events = self.calendar.date_search(start = timeFrom, end = timeTill)
+        print(f"returned events are {events}")
         result_events = []
         for (index, event) in enumerate(events):
             vevent = event.vobject_instance.vevent
+            print(f"vevent is: {vevent}")
             summary = vevent.summary.value if hasattr(vevent, 'summary') else "No title"
+            print(f"summary in vevent is: {summary}")
             dtstart = vevent.dtstart.value if hasattr(vevent, 'dtstart') else "Unknown start time"
             dtend = vevent.dtend.value if hasattr(vevent, 'dtend') else "Unknown end time"
             result_events.append(f"Event-{index}: summary is '{summary}' and from {dtstart} until {dtend}")
@@ -105,7 +110,7 @@ END:VCALENDAR""")
             "type": "function",
             "function": {
                 "name": "getEvents",
-                "description": "Get information about events in the specified time slot. timeFrom and timeTill have to be in iCalendar (ICS) format (YYYYMMDDTHHMMSSZ).",
+                "description": "Get information about events in the specified time slot. timeFrom and timeTill have to be in isoformat.",
                 "parameters": {
                     "type": "object",
                     "properties": {

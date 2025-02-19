@@ -1,20 +1,8 @@
-import os.path
-from dotenv import load_dotenv
 import json
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
-from googleapiclient.discovery import build
 import requests
-from calendarHelper.calendarHelper import CalendarHelper
-from calendarHelper.googleCalendar import GoogleCalendar
-from calendarHelper.nextcloudCalendar import NextcloudCalendar
-import ast
-
-
-
-
-
+from assistants.functionManager import FunctionManager
+from assistants.calenderManager.googleCalendar import GoogleCalendar
+from assistants.calenderManager.nextcloudCalendar import NextcloudCalendar
 
 
 class LLMAssistant():
@@ -23,15 +11,16 @@ class LLMAssistant():
 
         self.model_URL = f"http://localhost:{port}/api/prompt"
 
-        self.calendar: CalendarHelper = GoogleCalendar()
-        # self.calendar: CalendarHelper = NextcloudCalendar()
+        self.google_calendar: GoogleCalendar = GoogleCalendar()
+        self.nextcloud_calendar: NextcloudCalendar = NextcloudCalendar()
+        self.manager: FunctionManager = FunctionManager()
 
         first_message = {
             "role": "system",
-            "content": self.calendar.definePrompt()
+            "content": self.google_calendar.definePrompt()
         }
         self.messages = [first_message]
-        self.tools = self.calendar.defineTools()
+        self.tools = self.google_calendar.defineTools()
         self.tools.append(self.define_function_endConversation())
 
     def get_LLM_response(self, messages, tools) -> str:
@@ -52,7 +41,7 @@ class LLMAssistant():
             "type": "function",
             "function": {
                 "name": "endConversation",
-                "description": "Call this function to end the conversation, but ONLY after at least two messages from the user and ONLY if it seems appropriate and the user does not have any left questions",
+                "description": "Call this function to end the conversation, but ONLY the user is statisfied and the user does not have any left questions.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -62,6 +51,33 @@ class LLMAssistant():
             }
         }
         return function
+
+    def manager_conversation_loop(self):
+
+        active_manager = self.manager
+        while active_manager.is_alive:
+            
+            user_input = input("[USER]: ")
+            active_manager.push_user_message(user_input)
+            active_manager.unstatisfy()
+
+            while not active_manager.is_statisfied:
+                raw_response = self.get_LLM_response(active_manager.messages, active_manager.tools)
+                active_manager.push_assistant_message(raw_response)
+
+                try:
+                    response = json.loads(raw_response)
+                    response = response[0]
+                    called_function = response["name"]
+                    function_response = active_manager.handle_function_call(called_function, response["arguments"])
+                    active_manager.push_user_message(function_response)
+
+                except Exception as error:
+                    active_manager.statisfy()
+
+            print(f"[{active_manager.messages[len(active_manager.messages)-1]["role"].swapcase()}]: {active_manager.messages[len(active_manager.messages)-1]["content"]}")
+
+
 
     def conversation_loop(self):
 
@@ -100,7 +116,7 @@ class LLMAssistant():
                             loop_condition = False
                             isWaiting = True
                         else: 
-                            function_response = self.calendar.handleFunctionCall(called_function, response["arguments"])
+                            function_response = self.google_calendar.handleFunctionCall(called_function, response["arguments"])
                             self.messages.append({
                                 "role": "user",
                                 "content": function_response,
@@ -113,4 +129,4 @@ class LLMAssistant():
 if __name__ == "__main__":
 
     my_assistant = LLMAssistant()
-    my_assistant.conversation_loop()
+    my_assistant.manager_conversation_loop()
