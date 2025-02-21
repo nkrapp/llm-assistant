@@ -1,4 +1,6 @@
 from assistants.managerStructure import ManagerStructure
+from typing import Literal
+
 
 class FunctionManager(ManagerStructure):
 
@@ -12,10 +14,13 @@ class FunctionManager(ManagerStructure):
             "content": self.prompt
         }]
 
-    def handle_function_call(self, called_function, arguments) -> str:
-        if(called_function == "endConversation"):
+    def handle_function_call(self, called_function: str, arguments: dict) -> str:
+        if called_function == "end_conversation":
             self.kill()
             return "Conversation has been ended. Say goodbye to the user!"
+        elif called_function == "assign_task_to":
+            self.assigned_task_to = arguments["target"]
+            return ""
         else:
             return "This function does not exist!"
 
@@ -23,7 +28,7 @@ class FunctionManager(ManagerStructure):
     def append_tools(self):
         all_tools = self.tools
         tools = [
-
+            self.define_function_assign_task_to(),
         ]
         for tool in tools:
             all_tools.append(tool)
@@ -36,3 +41,20 @@ class FunctionManager(ManagerStructure):
         file = open("assistants/functionManagerPrompt.txt", "r")
         prompt = file.read()
         return prompt
+
+    def define_function_assign_task_to(self):
+        function = {
+            "type": "function",
+            "function": {
+                "name": "assign_task_to",
+                "description": "Assign the task to the assistant who manages the topic that matches the user request.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "target": {"type": ["Google", "Nextcloud"]}
+                    },
+                    "required": ["target"],
+                }
+            }
+        }
+        return function

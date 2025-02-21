@@ -5,16 +5,19 @@ class ManagerStructure():
     def __init__(self):
         
         self.prompt: str = ""
-        self.tools: list = [self.define_function_endConversation()]
+        self.tools: list = [self.define_function_end_conversation()]
         self.messages: list[dict[str,str]] = []
 
         # whether the assistant is ready to return an anwser to the user or not
         self.is_statisfied: bool = False
-        
+
+        # whether the assistant wants to assign the task to someone else and to whom        
+        self.assigned_task_to: str = "None"
+
         self.is_alive: bool = True
 
 
-    def handle_function_call(self, called_function: str, arguments):
+    def handle_function_call(self, called_function: str, arguments: dict) -> str:
         pass
 
     def statisfy(self):
@@ -38,12 +41,12 @@ class ManagerStructure():
             "content": message
         })
 
-    def define_function_endConversation(self) -> dict:
+    def define_function_end_conversation(self) -> dict:
         function = {
             "type": "function",
             "function": {
-                "name": "endConversation",
-                "description": "Call this function to end the conversation, but ONLY the user is statisfied and the user does not have any left questions.",
+                "name": "end_conversation",
+                "description": "Call this function to end the conversation, but ONLY when the user is done with his requests and the user does not have any left questions. Before calling this function ask the user at least once if they have any left questions.",
                 "parameters": {
                     "type": "object",
                     "properties": {

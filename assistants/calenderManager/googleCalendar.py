@@ -8,7 +8,7 @@ from googleapiclient.discovery import build
 from assistants.managerStructure import ManagerStructure
 import datetime
 
-# colorIds:
+# color_ids:
 """
 blue / lavendel: -
 light green / Salbei: 2
@@ -53,48 +53,51 @@ class GoogleCalendar(ManagerStructure):
                 token.write(self.creds.to_json())
 
         for tool in [
-            self.define_function_getEvents(),
-            self.define_function_putEvents(),
-            self.define_function_deleteEvent(),
-            self.define_function_editEvent(),
+            self.define_function_get_events(),
+            self.define_function_put_event(),
+            self.define_function_delete_event(),
+            self.define_function_edit_event(),
+            self.define_function_call_for_help()
         ]:
             self.tools.append(tool)
         
         self.today = datetime.datetime.now().isoformat()
         self.prompt = f"""
-You are a helpful dialogue-assistant with tool calling capabilities, that allow you to access and change a calendar. 
-Have a pleasant conversation with the user and try to help them with their tasks.        
+You are a helpful dialogue-assistant with tool calling capabilities, that allow you to access and change a calendar. Your ONLY purpose is to manage the users Google Calendar and nothing else.
+Have a pleasant conversation with the user and try to help them with their tasks regarding the calendar. If the topic is not about the users calendar you have to call for help with the specific function.
 Todays date is {self.today}. 
 
-Call a function only if you are sure the user wants a specific tool called. Ask for more information if a task request seems to broad.
+Call a function only if you are sure the user wants a specific tool called or you want to call for help because the topic does not concern the users calendar. Ask for more information if a task request seems to broad.
 After every message decide if you want to call a function or anwser with plain text. You CANNOT do both. Call a function only if you are sure the user wants a specific tool called. Keep the conversation going until the user specifically wants to end the conversation. DON'T end the conversation to early.
 Respond with the function you want to use if you decide to call a function, else respond with plain text.
 
-Here are the different colorIds you should use:
+Here are the different color_ids you should use:
 '10' - green and music related, 
 '5' - yellow and Friends related, 
 '4' - light red and study related, 
 '8' - grey and used when unsure",
 
-If you are calling a function: Always put the object inside a list. Do not write an introduction or summary.
 """
+        self.messages: list[dict[str,str]] = [{
+                "role": "system",
+                "content": self.prompt
+            }]
 
-
-    def defineTools(self) -> list[str]:
+    def define_tools(self) -> list[str]:
         return self.tools
 
-    def definePrompt(self) -> str:
+    def define_prompt(self) -> str:
         return self.prompt
 
-    def getEvents(self, timeFrom, timeTill):
+    def get_events(self, time_from, time_till):
         try:
             service = build('calendar', 'v3', credentials=self.creds)
 
             # Call the Calendar API
-            timePointStart = timeFrom if "Z" in timeFrom else timeFrom + 'Z'
-            timePointEnd = timeTill if "Z" in timeTill else timeTill + 'Z'
+            time_point_start = time_from if "Z" in time_from else time_from + 'Z'
+            time_point_end = time_till if "Z" in time_till else time_till + 'Z'
 
-            events_result = service.events().list(calendarId='primary', timeMin = timePointStart, timeMax = timePointEnd, 
+            events_result = service.events().list(calendarId='primary', timeMin = time_point_start, timeMax = time_point_end, 
                                                     maxResults=3, singleEvents=True,
                                                     orderBy='startTime').execute()
             events = events_result.get('items', [])
@@ -108,29 +111,27 @@ If you are calling a function: Always put the object inside a list. Do not write
             print(f'An error occurred: {error}')
 
 
-    def putEvent(self, summary, timeFrom, timeTill, description = None, colorId = None):
+    def put_event(self, summary, time_from, time_till, description = None, color_id = None):
         try:
             service = build('calendar', 'v3', credentials=self.creds)
 
             # Call the Calendar API
             # now = datetime.datetime.utcnow().isoformat() + 'Z'  # 'Z' indicates UTC time
-            timePointStart = timeFrom
-            timePointEnd = timeTill
+            time_point_start = time_from
+            time_point_end = time_till
 
-
-            print("inside calendar putEvent")
             event = {
                 'summary': summary,
                 "description": description if description != None else "",
                 'start': {
-                    'dateTime': timePointStart,  # Adjust to your local time and format
+                    'dateTime': time_point_start,  # Adjust to your local time and format
                     'timeZone': 'Europe/Berlin',
                 },
                 'end': {
-                    'dateTime': timePointEnd,
+                    'dateTime': time_point_end,
                     'timeZone': 'Europe/Berlin',
                 },
-                "colorId": colorId if colorId != None else "8",
+                "colorId": color_id if color_id != None else "8",
                 "reminders": {
                     "useDefault": True,
                 },
@@ -144,86 +145,86 @@ If you are calling a function: Always put the object inside a list. Do not write
         except Exception as error:
             print(f'An error occurred: {error}')
 
-    def deleteEvent(self, eventId):
+    def delete_event(self, event_id):
         try:
             service = build('calendar', 'v3', credentials=self.creds)
-            service.events().delete(calendarId = 'primary', eventId = eventId).execute()
+            service.events().delete(calendarId = 'primary', event_id = event_id).execute()
             return True
         except Exception as error:
             print(f'An error occurred: {error}')
             
-    def editEvent(self, eventId, timeFrom = None, timeTill = None, summary = None, description = None, colorId = None):
+    def edit_event(self, event_id, time_from = None, time_till = None, summary = None, description = None, color_id = None):
         try:
             service = build('calendar', 'v3', credentials=self.creds)
-            event = service.events().get(calendarId='primary', eventId=eventId).execute()
+            event = service.events().get(calendarId='primary', event_id=event_id).execute()
 
             start = {
-                'dateTime': timeFrom,  # Adjust to your local time and format
+                'dateTime': time_from,  # Adjust to your local time and format
                 'timeZone': 'Europe/Berlin',
-            } if timeFrom != None else event["start"]
+            } if time_from != None else event["start"]
 
             end = {
-                'dateTime': timeTill,  # Adjust to your local time and format
+                'dateTime': time_till,  # Adjust to your local time and format
                 'timeZone': 'Europe/Berlin',
-            } if timeTill != None else event["start"]
+            } if time_till != None else event["start"]
 
             
             event["summary"] = summary if summary != None else event["summary"]
             event["start"] = start
             event["end"] = end
             event["description"] = description if description != None else event["description"]
-            event["colorId"] = colorId if colorId != None else event["colorId"]
+            event["colorId"] = color_id if color_id != None else event["colorId"]
 
-            updated_event = service.events().update(calendarId='primary', eventId=eventId, body=event).execute()
+            updated_event = service.events().update(calendarId='primary', event_id=event_id, body=event).execute()
             return updated_event
         except Exception as error:
             print(f'An error occurred: {error}')
             
-    def define_function_getEvents(self) -> dict:
+    def define_function_get_events(self) -> dict:
         function = {
             "type": "function",
             "function": {
-                "name": "getEvents",
-                "description": "Get information about events in the specified time slot. timeFrom and timeTill have to be in isoformat",
+                "name": "get_events",
+                "description": "Get information about events in the specified time slot. time_from and time_till have to be in isoformat",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "timeFrom": {"type": "string"},
-                        "timeTill": {"type": "string"},
+                        "time_from": {"type": "string"},
+                        "time_till": {"type": "string"},
                     },
-                    "required": ["timeFrom","timeTill"],
+                    "required": ["time_from","time_till"],
                 }
             }
         }
         return function
 
-    def define_function_putEvents(self) -> dict:
+    def define_function_put_event(self) -> dict:
         function = {
             "type": "function",
             "function": {
-                "name": "putEvent",
-                "description": "Add an event with the requested information to the calendar. timeFrom and timeTill have to be in isoformat. colorId needs suit the type of event: '10' - music related, '5' - Friends related, '4' - study related, '8' - when unsure",
+                "name": "put_event",
+                "description": "Add an event with the requested information to the calendar. time_from and time_till have to be in isoformat. color_id needs suit the type of event: '10' - music related, '5' - Friends related, '4' - study related, '8' - when unsure",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "summary": {"type": "string"},
                         "description": {"type": "string"},
-                        "timeFrom": {"type": "string"},
-                        "timeTill": {"type": "string"},
-                        "colorId": {"type": "string"},
+                        "time_from": {"type": "string"},
+                        "time_till": {"type": "string"},
+                        "color_id": {"type": "string"},
                     },
-                    "required": ["summary","timeFrom","timeTill"],
+                    "required": ["summary","time_from","time_till"],
                     # "additionalProperties": False,
                 }
             }
         }
         return function
 
-    def define_function_endConversation(self) -> dict:
+    def define_function_end_conversation(self) -> dict:
         function = {
             "type": "function",
             "function": {
-                "name": "endConversation",
+                "name": "end_conversation",
                 "description": "End the conversation, but only if it seems appropriate and the user does not have any left questions",
                 "parameters": {
                     "type": "object",
@@ -235,51 +236,69 @@ If you are calling a function: Always put the object inside a list. Do not write
         }
         return function
 
-    def define_function_deleteEvent(self) -> dict:
+    def define_function_delete_event(self) -> dict:
         function = {
             "type": "function",
             "function": {
-                "name": "deleteEvent",
-                "description": "Delete an existing event by providing its eventId",
+                "name": "delete_event",
+                "description": "Delete an existing event by providing its event_id",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "eventId": {"type": "string"}
+                        "event_id": {"type": "string"}
                     },
-                    "required": ["eventId"],
+                    "required": ["event_id"],
                 }
             }
         }
         return function
 
-    def define_function_editEvent(self) -> dict:
+    def define_function_edit_event(self) -> dict:
         function = {
             "type": "function",
             "function": {
-                "name": "editEvent",
-                "description": "Edit an existing event by providing its eventId and attributes, that should be changed",
+                "name": "edit_event",
+                "description": "Edit an existing event by providing its event_id and attributes, that should be changed",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "eventId": {"type": "string"},
-                        "timeFrom": {"type": "string"},
-                        "timeTill": {"type": "string"},
+                        "event_id": {"type": "string"},
+                        "time_from": {"type": "string"},
+                        "time_till": {"type": "string"},
                         "summary": {"type": "string"},
                         "description": {"type": "string"},
-                        "colorId": {"type": "string"},
+                        "color_id": {"type": "string"},
                     },
-                    "required": ["eventId"],
+                    "required": ["event_id"],
                 }
             }
         }
         return function
     
-    def handleFunctionCall(self, calledFunction: str, arguments: dict) -> str:
+    def define_function_call_for_help(self) -> dict:
+        function = {
+            "type": "function",
+            "function": {
+                "name": "call_for_help",
+                "description": "Call for help if you cannot help the user with their request because the topic does not concern you.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                    },
+                    "required": [],
+                }
+            }
+        }
+        return function
+    
 
-        if calledFunction == "getEvents":
-            events = self.getEvents(
-                timeFrom = arguments["timeFrom"], 
-                timeTill = arguments["timeTill"]
+    
+    def handle_function_call(self, called_function: str, arguments: dict) -> str:
+        print(f"TRYING TO CALL A FUNCTION NOW ITS '{called_function}'")
+        if called_function == "get_events":
+            events = self.get_events(
+                time_from = arguments["time_from"], 
+                time_till = arguments["time_till"]
             )
             if len(events) == 0:
                 return "There are no upcoming events."
@@ -287,40 +306,46 @@ If you are calling a function: Always put the object inside a list. Do not write
             else:
                 return f"The events for the asked time are: {events}."
             
-        elif calledFunction == "putEvent":
+        elif called_function == "put_event":
+            print("REALLY TRYING TO PUT EVENT")
             try:
-                event = self.putEvent(
+                print("REALLY TRYING TO PUT EVENT EVEN GOT INTO THE TRY")
+                event = self.put_event(
                     summary = arguments["summary"], 
-                    timeFrom = arguments["timeFrom"], 
-                    timeTill = arguments["timeTill"],
+                    time_from = arguments["time_from"], 
+                    time_till = arguments["time_till"],
                     description = arguments["description"] if "description" in arguments else None,
-                    colorId = arguments["colorId"] if "colorId" in arguments else None
+                    color_id = arguments["color_id"] if "color_id" in arguments else None
                 )
                 return f"Following event was created: {event}."
             
             except Exception as error:
                 return f"The event could not be created because of {error}. Excuse yourself in front of the user."
         
-        elif calledFunction == "deleteEvent":
+        elif called_function == "delete_event":
             try:
-                self.deleteEvent(eventId = arguments["eventId"])
+                self.delete_event(event_id = arguments["event_id"])
                 return "The event was deleted successfully"
                 
             except Exception as error:
                 return f"The event could not be deleted because of {error}. Excuse yourself in front of the user."
                 
-        elif calledFunction == "editEvent":
+        elif called_function == "edit_event":
             try:
-                event = self.editEvent(
-                    eventId = arguments["eventId"],
-                    timeFrom = arguments["timeFrom"] if "timeFrom" in arguments else None,
-                    timeTill = arguments["timeTill"] if "timeTill" in arguments else None,
+                event = self.edit_event(
+                    event_id = arguments["event_id"],
+                    time_from = arguments["time_from"] if "time_from" in arguments else None,
+                    time_till = arguments["time_till"] if "time_till" in arguments else None,
                     summary = arguments["summary"] if "summary" in arguments else None,
                     description = arguments["description"] if "description" in arguments else None,
-                    colorId = arguments["colorId"] if "colorId" in arguments else None
+                    color_id = arguments["color_id"] if "color_id" in arguments else None
                 )
                 return f"Following event was edited: {event}."
                 
             except Exception as error:
                 return f"The event could not be edited because of {error}. Excuse yourself in front of the user."
-                
+        elif called_function == "call_for_help":
+            self.assigned_task_to = "Manager"
+            return ""
+        else:
+            return "Something went wrong. The function could not be called"

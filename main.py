@@ -4,6 +4,16 @@ from assistants.functionManager import FunctionManager
 from assistants.calenderManager.googleCalendar import GoogleCalendar
 from assistants.calenderManager.nextcloudCalendar import NextcloudCalendar
 
+# receiving from Dialogue
+# {
+#   statement: string,
+#   endConversation: Boolean,
+# }
+# sending back to dialogue
+# {
+#   message: string,
+#   endConversation: Boolean,
+# }
 
 class LLMAssistant():
 
@@ -15,13 +25,7 @@ class LLMAssistant():
         self.nextcloud_calendar: NextcloudCalendar = NextcloudCalendar()
         self.manager: FunctionManager = FunctionManager()
 
-        first_message = {
-            "role": "system",
-            "content": self.google_calendar.definePrompt()
-        }
-        self.messages = [first_message]
-        self.tools = self.google_calendar.defineTools()
-        self.tools.append(self.define_function_endConversation())
+        self.history: list[dict[str,str]] = []
 
     def get_LLM_response(self, messages, tools) -> str:
 
@@ -32,25 +36,8 @@ class LLMAssistant():
         )
         decoded_output = response.json()["response"]["content"]
         
-        # if "<|end_of_text|>" in decoded_output:
-        #     decoded_output = decoded_output[0:len(decoded_output) - 15]
         return decoded_output
 
-    def define_function_endConversation(self) -> dict:
-        function = {
-            "type": "function",
-            "function": {
-                "name": "endConversation",
-                "description": "Call this function to end the conversation, but ONLY the user is statisfied and the user does not have any left questions.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                    },
-                    "required": [],
-                }
-            }
-        }
-        return function
 
     def manager_conversation_loop(self):
 
@@ -62,68 +49,42 @@ class LLMAssistant():
             active_manager.unstatisfy()
 
             while not active_manager.is_statisfied:
+
+                # print("getting a response from llm with following messages:")
+                # for message in active_manager.messages:
+                #     print(f"    [{message["role"].swapcase()}]: {message["content"]}")
                 raw_response = self.get_LLM_response(active_manager.messages, active_manager.tools)
                 active_manager.push_assistant_message(raw_response)
+                self.history.append(active_manager.messages[-1])
 
                 try:
                     response = json.loads(raw_response)
                     response = response[0]
                     called_function = response["name"]
                     function_response = active_manager.handle_function_call(called_function, response["arguments"])
-                    active_manager.push_user_message(function_response)
+
+                    assigned_task_to = active_manager.assigned_task_to
+                    active_manager.assigned_task_to = "None"
+                    if assigned_task_to != "None":
+                        if assigned_task_to == "Manager":
+                            active_manager = self.manager
+                        elif assigned_task_to == "Google":
+                            active_manager = self.google_calendar
+                        elif assigned_task_to == "Nextcloud":
+                            active_manager = self.nextcloud_calendar
+
+                        print(f"    Switching assistant to {assigned_task_to}")
+                        active_manager.push_user_message(user_input)
+                        active_manager.unstatisfy()
+                    else:
+                        active_manager.push_user_message(function_response)
 
                 except Exception as error:
                     active_manager.statisfy()
 
-            print(f"[{active_manager.messages[len(active_manager.messages)-1]["role"].swapcase()}]: {active_manager.messages[len(active_manager.messages)-1]["content"]}")
+            print(f"[{active_manager.messages[-1]["role"].swapcase()}]: {active_manager.messages[-1]["content"]}")
 
 
-
-    def conversation_loop(self):
-
-        loop_condition = True
-
-        while loop_condition:
-            print(f"[{self.messages[len(self.messages)-1]["role"].swapcase()}]: {self.messages[len(self.messages)-1]["content"]}")
-
-            user_input = input("[USER]: ")
-            if user_input == "q":
-                loop_condition = False
-            else:
-                self.messages.append({
-                    "role": "user",
-                    "content": user_input,
-                })
-
-                # condition for whether the assistant is ready for more input
-                isWaiting = False
-
-                while not isWaiting:
-                    
-                    raw_response = self.get_LLM_response(self.messages, self.tools)
-                    self.messages.append({
-                        "role": "assistant",
-                        "content": raw_response
-                    })
-
-                    try:
-                        response = json.loads(raw_response)
-                        response = response[0]
-                        called_function = response["name"]
-                        
-                        if called_function == "endConversation":
-                            print("Dialogue has been terminated")
-                            loop_condition = False
-                            isWaiting = True
-                        else: 
-                            function_response = self.google_calendar.handleFunctionCall(called_function, response["arguments"])
-                            self.messages.append({
-                                "role": "user",
-                                "content": function_response,
-                            })
-                    except:
-                        isWaiting = True
-                
 
                
 if __name__ == "__main__":

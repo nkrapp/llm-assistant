@@ -19,22 +19,22 @@ class NextcloudCalendar(ManagerStructure):
                 username = d["login"],
                 password = d["pass"],
             )
-            self.calendarName = d["calendarName"]
+            self.calendar_name = d["calendar_name"]
         
         calendars = self.client.principal().calendars()
         
         if not calendars:
             raise Exception("calendar not found")
         else:
-            calendar = self.getCalendarByName(calendars, self.calendarName)
+            calendar = self.get_calendar_by_name(calendars, self.calendar_name)
             if calendar == None:
                 raise Exception("calendar not found")
             else:
                 self.calendar: caldav.Calendar = calendar
 
         for tool in [
-            self.define_function_getEvents(),
-            self.define_function_putEvents(),
+            self.define_function_get_events(),
+            self.define_function_put_event(),
         ]:
             self.tools.append(tool)
         
@@ -52,7 +52,7 @@ If you are calling a function: Always put the object inside a list. Do not write
 """
 
     
-    def getCalendarByName(self, calendars: list[caldav.Calendar], name: str) -> caldav.Calendar | None:
+    def get_calendar_by_name(self, calendars: list[caldav.Calendar], name: str) -> caldav.Calendar | None:
         searchedCalendar = None
         if len(calendars) > 0:
             searchedCalendar = calendars[0]
@@ -63,15 +63,15 @@ If you are calling a function: Always put the object inside a list. Do not write
         return searchedCalendar
         
 
-    def defineTools(self) -> list[str]:
+    def define_tools(self) -> list[str]:
         return self.tools
 
-    def definePrompt(self) -> str:
+    def define_prompt(self) -> str:
         return self.prompt
 
-    def getEvents(self, timeFrom, timeTill):
-        print(f"searching from {timeFrom} until {timeTill}")
-        events = self.calendar.date_search(start = timeFrom, end = timeTill)
+    def get_events(self, time_from, time_till):
+        print(f"searching from {time_from} until {time_till}")
+        events = self.calendar.date_search(start = time_from, end = time_till)
         print(f"returned events are {events}")
         result_events = []
         for (index, event) in enumerate(events):
@@ -84,7 +84,7 @@ If you are calling a function: Always put the object inside a list. Do not write
             result_events.append(f"Event-{index}: summary is '{summary}' and from {dtstart} until {dtend}")
         return result_events
 
-    def putEvent(self, summary, timeFrom, timeTill, description = None):
+    def put_event(self, summary, time_from, time_till, description = None):
         
         try:
             self.calendar.add_event(f"""BEGIN:VCALENDAR
@@ -93,8 +93,8 @@ PRODID:NIKITAS_CALENDAR_ASSISTANT
 BEGIN:VEVENT
 UID:{uuid.uuid4()}-nikitasCustomEvents
 DTSTAMP:{self.today}
-DTSTART:{timeFrom}
-DTEND:{timeTill}
+DTSTART:{time_from}
+DTEND:{time_till}
 SUMMARY:{summary} 
 DESCRIPTION:{"no description" if description == None else description}
 END:VEVENT
@@ -105,49 +105,49 @@ END:VCALENDAR""")
             print(f'An error occurred: {error}')
 
             
-    def define_function_getEvents(self) -> dict:
+    def define_function_get_events(self) -> dict:
         function = {
             "type": "function",
             "function": {
-                "name": "getEvents",
-                "description": "Get information about events in the specified time slot. timeFrom and timeTill have to be in isoformat.",
+                "name": "get_events",
+                "description": "Get information about events in the specified time slot. time_from and time_till have to be in isoformat.",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "timeFrom": {"type": "string"},
-                        "timeTill": {"type": "string"},
+                        "time_from": {"type": "string"},
+                        "time_till": {"type": "string"},
                     },
-                    "required": ["timeFrom","timeTill"],
+                    "required": ["time_from","time_till"],
                 }
             }
         }
         return function
 
-    def define_function_putEvents(self) -> dict:
+    def define_function_put_event(self) -> dict:
         function = {
             "type": "function",
             "function": {
-                "name": "putEvent",
-                "description": "Add an event with the requested information to the calendar. timeFrom and timeTill have to be in iCalendar (ICS) format (YYYYMMDDTHHMMSSZ).",
+                "name": "put_event",
+                "description": "Add an event with the requested information to the calendar. time_from and time_till have to be in iCalendar (ICS) format (YYYYMMDDTHHMMSSZ).",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "summary": {"type": "string"},
                         "description": {"type": "string"},
-                        "timeFrom": {"type": "string"},
-                        "timeTill": {"type": "string"},
+                        "time_from": {"type": "string"},
+                        "time_till": {"type": "string"},
                     },
-                    "required": ["summary","timeFrom","timeTill"],
+                    "required": ["summary","time_from","time_till"],
                 }
             }
         }
         return function
 
-    def define_function_endConversation(self) -> dict:
+    def define_function_end_conversation(self) -> dict:
         function = {
             "type": "function",
             "function": {
-                "name": "endConversation",
+                "name": "end_conversation",
                 "description": "End the conversation, but only if it seems appropriate and the user does not have any left questions",
                 "parameters": {
                     "type": "object",
@@ -159,53 +159,53 @@ END:VCALENDAR""")
         }
         return function
 
-    def define_function_deleteEvent(self) -> dict:
+    def define_function_delete_event(self) -> dict:
         function = {
             "type": "function",
             "function": {
-                "name": "deleteEvent",
-                "description": "Delete an existing event by providing its eventId",
+                "name": "delete_event",
+                "description": "Delete an existing event by providing its event_id",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "eventId": {"type": "string"}
+                        "event_id": {"type": "string"}
                     },
-                    "required": ["eventId"],
+                    "required": ["event_id"],
                 }
             }
         }
         return function
 
-    def define_function_editEvent(self) -> dict:
+    def define_function_edit_event(self) -> dict:
         function = {
             "type": "function",
             "function": {
-                "name": "editEvent",
-                "description": "Edit an existing event by providing its eventId and attributes, that should be changed",
+                "name": "edit_event",
+                "description": "Edit an existing event by providing its event_id and attributes, that should be changed",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "eventId": {"type": "string"},
-                        "timeFrom": {"type": "string"},
-                        "timeTill": {"type": "string"},
+                        "event_id": {"type": "string"},
+                        "time_from": {"type": "string"},
+                        "time_till": {"type": "string"},
                         "summary": {"type": "string"},
                         "description": {"type": "string"},
-                        "colorId": {"type": "string"},
+                        "color_id": {"type": "string"},
                     },
-                    "required": ["eventId"],
+                    "required": ["event_id"],
                 }
             }
         }
         return function
     
-    def handleFunctionCall(self, calledFunction: str, arguments: dict) -> str:
+    def handle_function_call(self, called_function: str, arguments: dict) -> str:
 
-        if calledFunction == "putEvent":
+        if called_function == "put_event":
             try:
-                self.putEvent(
+                self.put_event(
                     summary = arguments["summary"], 
-                    timeFrom = arguments["timeFrom"], 
-                    timeTill = arguments["timeTill"],
+                    time_from = arguments["time_from"], 
+                    time_till = arguments["time_till"],
                     description = arguments["description"] if "description" in arguments else None,
                 )
                 return "The event was created successfully."
@@ -213,11 +213,11 @@ END:VCALENDAR""")
             except Exception as error:
                 return f"The event could not be created because of {error}. Excuse yourself in front of the user."
             
-        elif calledFunction == "getEvents":
+        elif called_function == "get_events":
             try:
-                events = self.getEvents(
-                    timeFrom = arguments["timeFrom"], 
-                    timeTill = arguments["timeTill"],
+                events = self.get_events(
+                    time_from = arguments["time_from"], 
+                    time_till = arguments["time_till"],
                 )
                 return f"Following events were found: {events}."
             
